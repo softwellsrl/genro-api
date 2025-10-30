@@ -22,7 +22,7 @@ classifiers = [
 keywords = ["genro", "api", "fastapi", "rest", "openapi", "swagger"]
 
 dependencies = [
-    "pydantic>=2.0.0",
+    "genro-core>=0.1.0",
     "fastapi>=0.100.0",
     "uvicorn>=0.20.0",
 ]
