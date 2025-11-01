@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from genro_api import Publisher
+from genro_api.config import PublisherConfig
 from tests.fixtures.library import Library
 
 
@@ -106,6 +107,9 @@ def main():
     print(f"Library populated with 10 shelves and 55 books!")
     print()
 
+    # Create configuration instance with in-memory database
+    config = PublisherConfig(":memory:")
+
     # Create and configure publisher
     publisher = Publisher(
         host="127.0.0.1",
@@ -113,18 +117,26 @@ def main():
         title="Library API",
         version="1.0.0",
         enable_rest=True,
-        enable_ui=False,  # NiceGUI not implemented yet
+        enable_ui=True,  # NiceGUI admin interface enabled
         enable_swagger=True,
+        config=config,  # Pass config instance for UI to read preferences
     )
 
     # Publish the library instance
     print("Publishing Library API...")
     publisher.publish(library)
 
+    # Publish the configuration instance so it appears as a tab
+    print("Publishing Configuration API...")
+    publisher.publish(config)
+
     print()
     print("=" * 60)
     print("Library API Server Starting")
     print("=" * 60)
+    print()
+    print("Admin Interface:")
+    print("  Admin Console: http://127.0.0.1:8000/admin")
     print()
     print("API Endpoints:")
     print("  Library: http://127.0.0.1:8000/library/*")

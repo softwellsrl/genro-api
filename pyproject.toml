@@ -25,6 +25,7 @@ dependencies = [
     "genro-core>=0.1.0",
     "fastapi>=0.100.0",
     "uvicorn>=0.20.0",
+    "nicegui>=1.4.0",
 ]
 
 [project.optional-dependencies]
