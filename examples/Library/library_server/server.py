@@ -14,16 +14,19 @@ from genro_api import Publisher
 pub = Publisher(
     host="127.0.0.1",
     port=8000,
-    title="Library API Server",
-    description="Example library management system with CRUD operations"
+    title="Library API Server"
 )
 
 # Create library instance and import data
 library = Library()
 library.import_from_csv()
 
-# Add library to publisher
-pub.add(library, path="/library")
+print("Populating library with sample data...")
+stats = library.get_stats()
+print(f"Library populated with {stats['total_shelves']} shelves and {stats['total_books']} books!")
+
+# Publish library to API
+pub.publish(library)
 
 # Run the server
 pub.run()
