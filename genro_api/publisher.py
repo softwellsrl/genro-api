@@ -1,3 +1,18 @@
+# Copyright (c) 2025 Softwell Srl, Milano, Italy
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """Publisher for automatic API exposure from @apiready decorated classes."""
 
 import inspect
@@ -998,6 +1013,63 @@ class Publisher:
             for _, cls in self._published_instances
         ]
 
+    def _execute_with_transaction(self, instance: object, bound_method: callable, **kwargs) -> Any:
+        """
+        Execute a method within a database transaction.
+
+        Args:
+            instance: Instance that may have database access
+            bound_method: The method to execute
+            **kwargs: Arguments to pass to the method
+
+        Returns:
+            Result from the method
+
+        Raises:
+            Exception: If method fails (after rollback) or if no database access found
+        """
+        # Try to find database connection from instance
+        db_conn = None
+
+        # Pattern 1: Instance has a 'db' attribute (Table, GenroMicroApplication)
+        if hasattr(instance, 'db'):
+            db = instance.db
+            if hasattr(db, 'connection'):
+                db_conn = db.connection
+
+        # Pattern 2: Instance has direct 'connection' attribute
+        elif hasattr(instance, 'connection'):
+            db_conn = instance.connection
+
+        # Pattern 3: Try to find through parent app (for nested managers)
+        elif hasattr(instance, '_library') and hasattr(instance._library, 'db'):
+            db = instance._library.db
+            if callable(db):
+                db = db('maindb')  # Try to get maindb
+            if hasattr(db, 'connection'):
+                db_conn = db.connection
+
+        if db_conn is None:
+            logger.warning(
+                f"Transaction requested but no database connection found on {type(instance).__name__}. "
+                f"Executing without transaction."
+            )
+            return bound_method(**kwargs)
+
+        # Execute within transaction
+        try:
+            cursor = db_conn.cursor()
+            cursor.execute("BEGIN")
+
+            result = bound_method(**kwargs)
+
+            db_conn.commit()
+            cursor.close()
+            return result
+        except Exception as e:
+            db_conn.rollback()
+            raise
+
     def _create_endpoint(
         self, router: APIRouter, instance: object, endpoint_info: dict[str, Any]
     ) -> None:
@@ -1016,7 +1088,8 @@ class Publisher:
                 "method": str (GET/POST),
                 "parameters": dict,  # {param_name: {type, required, default, description}}
                 "return_type": dict,  # {type, description}
-                "description": str
+                "description": str,
+                "transaction": bool  # Whether to execute in a transaction
             }
         """
         func_name = endpoint_info["function_name"]
@@ -1025,6 +1098,7 @@ class Publisher:
         params = endpoint_info.get("parameters", {})
         return_type_info = endpoint_info.get("return_type", {})
         description = endpoint_info.get("description", "")
+        needs_transaction = endpoint_info.get("transaction", False)
 
         # Get the bound method from instance
         if not hasattr(instance, func_name):
